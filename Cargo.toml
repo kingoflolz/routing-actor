@@ -1,0 +1,11 @@
+[package]
+name = "routing-actor"
+version = "0.1.0"
+authors = ["kingoflolz <wangben3@gmail.com>"]
+
+[dependencies]
+actix = "0.3"
+petgraph = {version = "0.4.10", features = ["serde-1"]}
+rand = "0.3.*"
+nalgebra = {version = "0.13.1", features = ["serde-serialize"]}
+spade = "1.2.0"
