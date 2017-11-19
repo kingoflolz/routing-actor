@@ -1,9 +1,6 @@
-struct Quality {
-    latency: f32,
-    bandwidth: f32,
-    packet_loss: f32,
-}
-
+#[derive(Clone, Debug)]
 pub struct Connection {
-    quality: Quality
+    pub latency: f32,
+    pub bandwidth: f32,
+    pub packet_loss: f32,
 }

@@ -1,4 +1,4 @@
-use actix::{msgs, Actor, Address, Arbiter, Context, System, Handler, Response, ResponseType};
+use actix::{Actor, Address, Context};
 use petgraph::graph::NodeIndex;
 use connection::Connection;
 

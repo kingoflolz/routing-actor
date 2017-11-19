@@ -1,16 +1,18 @@
 extern crate actix;
 extern crate petgraph;
 extern crate spade;
+extern crate tokio_core;
+extern crate futures;
+extern crate rand;
+#[macro_use]
+extern crate actix_derive;
 
-use actix::{msgs, Actor, Address, Arbiter, Context, System, Handler, ResponseType, SyncAddress};
+use actix::{Actor, Address, Arbiter, System, SyncAddress};
 
 mod node;
 mod world;
 mod connection;
 
-use node::*;
-
-use std::thread;
 use world::World;
 
 fn main() {
