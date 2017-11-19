@@ -1,4 +1,4 @@
-use actix::{msgs, Actor, Address, Arbiter, Context, System, Handler, Response, ResponseType};
+use actix::{msgs, Actor, Address, Arbiter, Context, System, Handler, Response, ResponseType, SyncAddress};
 
 use petgraph::Graph;
 use petgraph::graph::NodeIndex;
@@ -13,6 +13,7 @@ use connection::Connection;
 pub struct World {
     graph: Graph<Node, Connection>,
     rtree: RTree<MapNode>,
+    threads: Vec<SyncAddress<Arbiter>>
 }
 
 #[derive(Clone, Debug)]
@@ -29,10 +30,11 @@ impl HasPosition for MapNode {
 }
 
 impl World {
-    pub fn new() -> World {
+    pub fn new(threads: &Vec<SyncAddress<Arbiter>>) -> World {
         World {
             graph: Graph::new(),
-            rtree: RTree::new()
+            rtree: RTree::new(),
+            threads: threads.clone(),
         }
     }
 }
@@ -40,7 +42,17 @@ impl World {
 impl Actor for World {
     type Context = Context<Self>;
 
-    fn started(&mut self, _ctx: &mut Self::Context) {
+    fn started(&mut self, ctx: &mut Self::Context) {
         println!("World started");
+
+        for i in 0..10_000_000 {
+            self.threads[i % 4].send::<msgs::Execute>(msgs::Execute::new(move || {
+                Node::new(NodeIndex::new(i)).start::<Address<Node>>();
+                Ok(())
+            }))
+        }
+
+        println!("Added nodes");
+        Arbiter::system().send(msgs::SystemExit(0));
     }
 }

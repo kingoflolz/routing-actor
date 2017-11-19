@@ -1,17 +1,17 @@
 use actix::{msgs, Actor, Address, Arbiter, Context, System, Handler, Response, ResponseType};
-
+use petgraph::graph::NodeIndex;
 use connection::Connection;
 
 pub struct Node {
+    graph_index: NodeIndex,
     neighbours: Vec<NeighbourData>,
-    id: Option<Address<Node>>,
 }
 
 impl Node {
-    pub fn new() -> Node {
+    pub fn new(graph_index: NodeIndex) -> Node {
         Node {
             neighbours: Vec::new(),
-            id: None
+            graph_index,
         }
     }
 }
@@ -31,23 +31,7 @@ impl Actor for Node {
     type Context = Context<Self>;
 
     fn started(&mut self, _ctx: &mut Self::Context) {
-        println!("I am alive!");
-        Arbiter::system().send(msgs::SystemExit(0));
-    }
-}
-
-pub struct InitSelf {
-    pub id: Address<Node>
-}
-
-impl ResponseType for InitSelf {
-    type Item = ();
-    type Error = ();
-}
-
-impl Handler<InitSelf> for Node {
-    fn handle(&mut self, msg: InitSelf, _ctx: &mut Context<Self>) -> Response<Node, InitSelf> {
-        self.id = Some(msg.id);
-        Self::reply(())
+        // println!("Node started {:?}", self.graph_index);
+        // Arbiter::system().send(msgs::SystemExit(0));
     }
 }
