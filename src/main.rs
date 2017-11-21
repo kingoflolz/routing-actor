@@ -7,24 +7,18 @@ extern crate rand;
 #[macro_use]
 extern crate actix_derive;
 
-use actix::{Actor, Address, Arbiter, System, SyncAddress};
+use actix::*;
 
 mod node;
 mod world;
 mod connection;
 
-use world::World;
-
 fn main() {
     let system = System::new("test");
 
-    let mut threads: Vec<SyncAddress<Arbiter>> = Vec::new();
+    let addr = Arbiter::system_registry().get::<world::World>();
 
-    for i in 0..4 {
-        threads.push(Arbiter::new(format!("Core {}", i)))
-    }
-
-    World::new(&threads).start::<Address<World>>();
+    addr.send(world::Wake);
 
     system.run();
 }
