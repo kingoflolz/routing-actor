@@ -8,4 +8,3 @@ mod base;
 mod knodetable;
 pub mod protocol;
 pub mod service;
-mod utils;
