@@ -1,9 +1,8 @@
 use actix::*;
-use actix::dev::AsyncContextApi;
 
-use tokio_core::reactor::Timeout;
+use std::collections::HashMap;
+
 use std::time::Duration;
-use futures::future::Future;
 
 use rand::thread_rng;
 use rand::distributions::{Weighted, WeightedChoice, Sample, Range};
@@ -27,6 +26,8 @@ pub struct World {
     graph: StableDiGraph<GraphNode, Connection>,
     rtrees: Vec<RTree<MapNode>>,
     threads: Vec<SyncAddress<Arbiter>>,
+    mapping: HashMap<u64, NodeIndex<u32>>,
+
     active: usize,
     pending: usize,
     adding: bool,
@@ -62,6 +63,7 @@ impl World {
             graph: StableDiGraph::new(),
             rtrees: Vec::new(),
             threads: threads.clone(),
+            mapping: HashMap::new(),
             active: 0,
             pending: 0,
             adding: true,
@@ -98,7 +100,7 @@ fn connection(a: &[f32; 2], b: &[f32; 2], level: usize) -> Connection {
 impl Actor for World {
     type Context = Context<Self>;
 
-    fn started(&mut self, ctx: &mut Self::Context) {
+    fn started(&mut self, _ctx: &mut Self::Context) {
         println!("World started");
 
         let mut rng = thread_rng();
@@ -184,24 +186,21 @@ impl Actor for World {
 impl Supervised for World {}
 
 impl SystemService for World {
-    fn service_started(&mut self, ctx: &mut Context<Self>) {
+    fn service_started(&mut self, _ctx: &mut Context<Self>) {
         println!("Service started");
     }
 }
 
 // sent by node to world to notify that it has been initialised
+#[derive(Message)]
 pub struct HelloWorld {
     pub addr: SyncAddress<Node>,
     pub graph_index: NodeIndex,
-}
-
-impl ResponseType for HelloWorld {
-    type Item = ();
-    type Error = ();
+    pub id: u64,
 }
 
 impl Handler<HelloWorld> for World {
-    fn handle(&mut self, msg: HelloWorld, ctx: &mut Context<Self>) -> Response<Self, HelloWorld> {
+    fn handle(&mut self, msg: HelloWorld, _ctx: &mut Context<Self>) -> Response<Self, HelloWorld> {
         self.graph[msg.graph_index].address = Some(msg.addr.clone());
         self.active += 1;
         self.pending -= 1;
@@ -214,17 +213,12 @@ impl Handler<HelloWorld> for World {
     }
 }
 
+#[derive(Message)]
 pub struct Wake;
-
-impl ResponseType for Wake {
-    type Item = ();
-    type Error = ();
-}
 
 impl Handler<Wake> for World {
     // runs every ms
     fn handle(&mut self, _msg: Wake, ctx: &mut Context<Self>) -> Response<Self, Wake> {
-        let addr: Address<_> = ctx.address();
         ctx.notify(Wake, Duration::new(0, 100_000));
 
         if self.pending == 0 && self.adding {
@@ -240,17 +234,13 @@ impl Handler<Wake> for World {
     }
 }
 
+#[derive(Message)]
 pub struct AddThread {
     pub thread: SyncAddress<Arbiter>,
 }
 
-impl ResponseType for AddThread {
-    type Item = ();
-    type Error = ();
-}
-
 impl Handler<AddThread> for World {
-    fn handle(&mut self, msg: AddThread, ctx: &mut Context<Self>) -> Response<Self, AddThread> {
+    fn handle(&mut self, msg: AddThread, _ctx: &mut Context<Self>) -> Response<Self, AddThread> {
         self.threads.push(msg.thread);
         Self::reply(())
     }

@@ -1,6 +1,6 @@
 [[package]]
 name = "actix"
-version = "0.3.2"
+version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "crossbeam 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -437,7 +437,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "routing-actor"
 version = "0.1.0"
 dependencies = [
- "actix 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "actix 0.3.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "actix_derive 0.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.17 (registry+https://github.com/rust-lang/crates.io-index)",
  "nalgebra 0.13.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -666,7 +666,7 @@ dependencies = [
 ]
 
 [metadata]
-"checksum actix 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)" = "94f4be04630e287cc643dc3b02759e066b125298b110c22742850221a5ffeba9"
+"checksum actix 0.3.3 (registry+https://github.com/rust-lang/crates.io-index)" = "ff6f6c433b70ff5c9b66d0426fe79167199640f1e71db1a363d911b9216bf22b"
 "checksum actix_derive 0.0.2 (registry+https://github.com/rust-lang/crates.io-index)" = "0934df1b19110d79d5cbfde9ee234917e4487c2ba5d16897f43ae3b24a4637a2"
 "checksum alga 0.5.2 (registry+https://github.com/rust-lang/crates.io-index)" = "9a9749cf5cfdca30ac35de67358fb24e2d26a88e2819ee83efb794a09f0b421b"
 "checksum approx 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)" = "08abcc3b4e9339e33a3d0a5ed15d84a687350c05689d825e0f6655eef9e76a94"

@@ -4,7 +4,7 @@ version = "0.1.0"
 authors = ["kingoflolz <wangben3@gmail.com>"]
 
 [dependencies]
-actix = "0.3"
+actix = "0.3.3"
 actix_derive = "0.0.2"
 tokio-core = "0.1"
 futures = "0.1"

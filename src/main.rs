@@ -6,12 +6,15 @@ extern crate futures;
 extern crate rand;
 #[macro_use]
 extern crate actix_derive;
+extern crate nalgebra;
 
 use actix::*;
 
 mod node;
 mod world;
 mod connection;
+mod nc;
+mod packet;
 
 fn main() {
     let system = System::new("test");
