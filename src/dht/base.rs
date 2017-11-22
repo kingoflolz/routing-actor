@@ -44,43 +44,6 @@ impl GenericId for u64 {
     }
 }
 
-impl GenericId for Vec<u8> {
-    fn bitxor(&self, other: &Vec<u8>) -> Vec<u8> {
-        self.iter().zip(other.iter()).map(|(digit1, digit2)| digit1 ^ digit2).collect()
-    }
-    fn is_zero(&self) -> bool {
-        self.iter().all(|digit| *digit == 0)
-    }
-    fn bits(&self) -> usize {
-        let mut bits = self.len() * 8;
-        for digit in self {
-            if *digit == 0 {
-                bits -= 8;
-            } else {
-                return bits - digit.leading_zeros() as usize;
-            }
-        }
-        assert!(bits == 0);
-        0
-    }
-    fn gen(bit_size: usize) -> Vec<u8> {
-        let nb_full_digits = bit_size / 8;
-        let nb_bits_partial_digit = bit_size % 8;
-        let mut rng = rand::thread_rng();
-        if nb_bits_partial_digit == 0 {
-            let mut res = vec![0u8; nb_full_digits];
-            rng.fill_bytes(&mut res);
-            res
-        } else {
-            let mut res = vec![0u8; nb_full_digits + 1];
-            let first_digit = rng.gen_range(0, 1 << (nb_bits_partial_digit - 1));
-            res[0] = first_digit;
-            rng.fill_bytes(&mut res[1..nb_full_digits + 1]);
-            res
-        }
-    }
-}
-
 /// Trait representing table with known nodes.
 ///
 /// Keeps some reasonable subset of known nodes passed to `update`.
