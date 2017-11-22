@@ -15,6 +15,7 @@ mod world;
 mod connection;
 mod nc;
 mod packet;
+mod dht;
 
 fn main() {
     let system = System::new("test");
