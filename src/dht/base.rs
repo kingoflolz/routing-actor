@@ -15,6 +15,8 @@ use std::fmt::Debug;
 use std::str::FromStr;
 use std::net;
 
+use futures::Future;
+
 /// Generalization of num::BigUint, with hexadecimal encoding and decoding
 pub trait GenericId: Hash + PartialEq + Eq + Ord + Clone + Send + Sync + Debug {
     fn bitxor(&self, other: &Self) -> Self;
@@ -49,14 +51,16 @@ impl GenericId for u64 {
 /// Keeps some reasonable subset of known nodes passed to `update`.
 pub trait GenericNodeTable<TId, TAddr>: Send + Sync
     where TId: GenericId {
+    /// Create new table
+    fn new(node_id: TId) -> Self;
     /// Generate suitable random ID.
     fn random_id(&self) -> TId;
     /// Store or update node in the table.
-    fn update(&mut self, node: &Node<TId, TAddr>) -> bool;
+    fn update(&mut self, node: &DHTNode<TId, TAddr>) -> bool;
     /// Find given number of node, closest to given ID.
-    fn find(&self, id: &TId, count: usize) -> Vec<Node<TId, TAddr>>;
+    fn find(&self, id: &TId, count: usize) -> Vec<DHTNode<TId, TAddr>>;
     /// Pop expired or the oldest nodes from table for inspection.
-    fn pop_oldest(&mut self) -> Vec<Node<TId, TAddr>>;
+    fn pop_oldest(&mut self) -> Vec<DHTNode<TId, TAddr>>;
 }
 
 /// Structure representing a node in system.
@@ -64,7 +68,7 @@ pub trait GenericNodeTable<TId, TAddr>: Send + Sync
 /// Every node has an address (IP and port) and a numeric ID, which is
 /// used to calculate metrics and look up data.
 #[derive(Clone, Debug)]
-pub struct Node<TId, TAddr> {
+pub struct DHTNode<TId, TAddr> {
     /// Network address of the node.
     pub address: TAddr,
     /// ID of the node.
@@ -77,16 +81,13 @@ pub trait GenericAPI<TId, TAddr>
     /// Value type.
     type TValue: Send + Sync + Clone;
     /// Ping a node.
-    fn ping<F>(&mut self, node: &Node<TId, TAddr>, callback: F)
-        where F: FnOnce(&Node<TId, TAddr>, bool);
+    fn ping<F>(&mut self, node: &DHTNode<TId, TAddr>) -> Future<Item=DHTNode<TId, TAddr>, Error=()>;
     /// Return nodes clothest to the given id.
-    fn find_node<F>(&mut self, id: &TId, callback: F)
-        where F: FnOnce(Vec<Node<TId, TAddr>>);
+    fn find_node<F>(&mut self, id: &TId) -> Future<Item=Vec<DHTNode<TId, TAddr>>, Error=()>;
     /// Find a value in the network.
     ///
     /// Either returns a value or several clothest nodes.
-    fn find_value<F>(&mut self, id: &TId, callback: F)
-        where F: FnOnce(Option<Self::TValue>, Vec<Node<TId, TAddr>>);
+    fn find_value<F>(&mut self, id: &TId) -> Future<Item=(Option<Self::TValue>, Vec<DHTNode<TId, TAddr>>), Error=()>;
     /// Store a value on a node.
-    fn store(&mut self, node: &Node<TId, TAddr>, id: &TId, value: Self::TValue);
+    fn store(&mut self, node: &DHTNode<TId, TAddr>, id: &TId, value: Self::TValue);
 }

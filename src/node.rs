@@ -4,32 +4,51 @@ use connection::Connection;
 
 use rand::{thread_rng, Rng};
 
+use std::collections::HashMap;
+
 use world;
 use nc;
 use packet::*;
 
+use packet::PacketData;
+use std::clone::Clone;
+
+use dht::service::*;
+
 pub struct Node {
-    id: u64,
     // going to be bigger in the future
-    graph_index: NodeIndex,
-    neighbours: Vec<NeighbourData>,
-    nc: nc::NCNodeData,
+    pub id: u64,
+    pub graph_index: NodeIndex,
+    pub neighbours: Vec<NeighbourData>,
+    pub neighbours_map: HashMap<u64, usize>,
+    pub nc: nc::NCNodeData,
+    pub dht: DHT,
 }
 
 impl Node {
     pub fn new(graph_index: NodeIndex) -> Node {
+        let id = thread_rng().next_u64();
         Node {
-            id: thread_rng().next_u64(),
+            id,
             neighbours: Vec::new(),
             graph_index,
+            neighbours_map: HashMap::new(),
             nc: nc::NCNodeData::new(),
+            dht: DHT::new(id)
         }
+    }
+
+    fn fwd<T: PacketData + Clone + Send + 'static>(&self, msg: Packet<T>) {
+        let mut msg = msg.clone();
+        let next = msg.route.pop().unwrap();
+        let index = self.neighbours_map[&next];
+        self.neighbours[index].address.send(msg);
     }
 }
 
-struct NeighbourData {
-    connection: Connection,
-    address: SyncAddress<Node>,
+pub struct NeighbourData {
+    pub connection: Connection,
+    pub address: SyncAddress<Node>,
 }
 
 struct Quality {
@@ -56,7 +75,8 @@ impl Actor for Node {
 // sent by node to another node to notify its presence
 #[derive(Message)]
 pub struct HelloNode {
-    pub addr: SyncAddress<Node>,
+    pub id: u64,
+    pub pipe: SyncAddress<Node>,
     pub connection: Connection,
     // if this is a reply
     pub reply: bool,
@@ -64,11 +84,13 @@ pub struct HelloNode {
 
 impl Handler<HelloNode> for Node {
     fn handle(&mut self, msg: HelloNode, ctx: &mut Context<Self>) -> Response<Self, HelloNode> {
-        self.neighbours.push(NeighbourData { address: msg.addr.clone(), connection: msg.connection.clone() });
-
-        // only send back message if message it did not originate to prevent loops
-        if !msg.reply {
-            msg.addr.send(HelloNode { addr: ctx.address(), reply: true, ..msg })
+        if !self.neighbours_map.contains_key(&msg.id) {
+            self.neighbours_map.insert(msg.id, self.neighbours.len());
+            self.neighbours.push(NeighbourData { address: msg.pipe.clone(), connection: msg.connection.clone() });
+            // only send back message if message it did not originate to prevent loops
+            if !msg.reply {
+                msg.pipe.send(HelloNode { pipe: ctx.address(), reply: true, id: self.id, ..msg })
+            }
         }
         Self::reply(())
     }
@@ -79,21 +101,31 @@ pub struct Tick;
 
 impl Handler<Tick> for Node {
     fn handle(&mut self, _msg: Tick, _ctx: &mut Context<Self>) -> Response<Self, Tick> {
+        self.fwd(Packet {
+            des: 0,
+            route: Vec::new(),
+            data: Ping { from: self.id },
+        });
         Self::reply(())
     }
 }
 
 // in band messages
-impl<T: PacketData> Handler<Packet<T>> for Node {
+impl<T: PacketData + Clone + Send + 'static> Handler<Packet<T>> for Node {
     fn handle(&mut self, msg: Packet<T>, ctx: &mut Context<Self>) -> Response<Self, Packet<T>> {
-        T::process(&msg, self);
+        if msg.des == self.id {
+            assert_eq!(msg.route.len(), 0);
+            T::process(&msg, self);
+        } else {
+            self.fwd(msg);
+        }
         Self::reply(())
     }
 }
 
-impl<T: PacketData> Handler<SearchPacket<T>> for Node {
+impl<T: SearchPacketData + Clone + Send> Handler<SearchPacket<T>> for Node {
     fn handle(&mut self, msg: SearchPacket<T>, ctx: &mut Context<Self>) -> Response<Self, SearchPacket<T>> {
-        T::process_search(&msg, self);
+        T::process(&msg, self);
         Self::reply(())
     }
 }

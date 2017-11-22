@@ -206,7 +206,7 @@ impl Handler<HelloWorld> for World {
         self.pending -= 1;
         for i in self.graph.edges(msg.graph_index) {
             if let Some(ref addr) = self.graph[i.target()].address {
-                addr.send(HelloNode { addr: msg.addr.clone(), reply: false, connection: i.weight().clone() })
+                addr.send(HelloNode { pipe: msg.addr.clone(), reply: false, connection: i.weight().clone(), id: msg.id })
             }
         }
         Self::reply(())

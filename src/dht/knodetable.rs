@@ -20,7 +20,7 @@ use std::collections::VecDeque;
 
 use super::GenericId;
 use super::GenericNodeTable;
-use super::Node;
+use super::DHTNode;
 
 
 // TODO(divius): make public?
@@ -45,7 +45,7 @@ pub struct KNodeTable<TId, TAddr> {
 
 /// K-bucket - structure for keeping last nodes in Kademlia.
 pub struct KBucket<TId, TAddr> {
-    data: VecDeque<Node<TId, TAddr>>,
+    data: VecDeque<DHTNode<TId, TAddr>>,
     size: usize,
 }
 
@@ -95,17 +95,21 @@ impl<TId, TAddr> KNodeTable<TId, TAddr>
 impl<TId, TAddr> GenericNodeTable<TId, TAddr> for KNodeTable<TId, TAddr>
     where TId: GenericId,
           TAddr: Clone + Debug + Sync + Send {
+    fn new(this_id: TId) -> KNodeTable<TId, TAddr> {
+        KNodeTable::new_with_details(this_id, BUCKET_SIZE, DEFAULT_HASH_SIZE)
+    }
+
     fn random_id(&self) -> TId {
         TId::gen(self.hash_size)
     }
 
-    fn update(&mut self, node: &Node<TId, TAddr>) -> bool {
+    fn update(&mut self, node: &DHTNode<TId, TAddr>) -> bool {
         assert!(node.id != self.this_id);
         let bucket = self.bucket_number(&node.id);
         self.buckets[bucket].update(node)
     }
 
-    fn find(&self, id: &TId, count: usize) -> Vec<Node<TId, TAddr>> {
+    fn find(&self, id: &TId, count: usize) -> Vec<DHTNode<TId, TAddr>> {
         debug_assert!(count > 0);
         assert!(*id != self.this_id);
 
@@ -114,7 +118,7 @@ impl<TId, TAddr> GenericNodeTable<TId, TAddr> for KNodeTable<TId, TAddr>
         data_copy[0..cmp::min(count, data_copy.len())].to_vec()
     }
 
-    fn pop_oldest(&mut self) -> Vec<Node<TId, TAddr>> {
+    fn pop_oldest(&mut self) -> Vec<DHTNode<TId, TAddr>> {
         // For every full k-bucket, pop the last.
         // TODO(divius): TTL expiration?
         self.buckets.iter_mut()
@@ -135,7 +139,7 @@ impl<TId, TAddr> KBucket<TId, TAddr>
         }
     }
 
-    pub fn update(&mut self, node: &Node<TId, TAddr>) -> bool {
+    pub fn update(&mut self, node: &DHTNode<TId, TAddr>) -> bool {
         if self.data.iter().any(|x| x.id == node.id) {
             self.update_position(node.clone());
             true
@@ -147,20 +151,20 @@ impl<TId, TAddr> KBucket<TId, TAddr>
         }
     }
 
-    pub fn find(&self, id: &TId, count: usize) -> Vec<Node<TId, TAddr>> {
+    pub fn find(&self, id: &TId, count: usize) -> Vec<DHTNode<TId, TAddr>> {
         let mut data_copy: Vec<_> = self.data.iter().map(|n| n.clone()).collect();
         data_copy.sort_by_key(|n| KNodeTable::<TId, TAddr>::distance(id, &n.id));
         data_copy[0..cmp::min(count, data_copy.len())].to_vec()
     }
 
-    pub fn data(&self) -> &VecDeque<Node<TId, TAddr>> {
+    pub fn data(&self) -> &VecDeque<DHTNode<TId, TAddr>> {
         &self.data
     }
     pub fn size(&self) -> usize {
         self.size
     }
 
-    fn update_position(&mut self, node: Node<TId, TAddr>) {
+    fn update_position(&mut self, node: DHTNode<TId, TAddr>) {
         // TODO(divius): 1. optimize, 2. make it less ugly
         let mut new_data = VecDeque::with_capacity(self.data.len());
         new_data.extend(self.data.iter()

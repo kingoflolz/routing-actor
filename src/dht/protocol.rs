@@ -8,7 +8,7 @@
 
 //! Generic protocol bits for implementing custom protocols.
 
-use super::{GenericId, Node};
+use super::{GenericId, DHTNode};
 
 
 /// Payload in the request.
@@ -21,14 +21,14 @@ pub enum RequestPayload<TId, TValue> {
 
 /// Request structure.
 pub struct Request<TId, TAddr, TValue> {
-    pub caller: Node<TId, TAddr>,
+    pub caller: DHTNode<TId, TAddr>,
     pub request_id: TId,
     pub payload: RequestPayload<TId, TValue>
 }
 
 /// Payload in the response.
 pub enum ResponsePayload<TId, TAddr, TValue> {
-    NodesFound(Vec<Node<TId, TAddr>>),
+    NodesFound(Vec<DHTNode<TId, TAddr>>),
     ValueFound(TValue),
     NoResult
 }
@@ -36,6 +36,6 @@ pub enum ResponsePayload<TId, TAddr, TValue> {
 /// Response structure.
 pub struct Response<TId, TAddr, TValue> {
     pub request: Request<TId, TAddr, TValue>,
-    pub responder: Node<TId, TAddr>,
+    pub responder: DHTNode<TId, TAddr>,
     pub payload: ResponsePayload<TId, TAddr, TValue>
 }
