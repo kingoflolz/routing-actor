@@ -70,7 +70,7 @@ pub trait GenericNodeTable<TId, TAddr>: Send + Sync
 #[derive(Clone, Debug)]
 pub struct DHTNode<TId, TAddr> {
     /// Network address of the node.
-    pub address: TAddr,
+    pub route: TAddr,
     /// ID of the node.
     pub id: TId
 }

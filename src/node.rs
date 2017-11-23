@@ -38,15 +38,16 @@ impl Node {
         }
     }
 
-    fn fwd<T: PacketData + Clone + Send + 'static>(&self, msg: Packet<T>) {
+    pub fn fwd<T: PacketData + Clone + Send + 'static>(&self, msg: Packet<T>) {
         let mut msg = msg.clone();
-        let next = msg.route.pop().unwrap();
+        let next = msg.route.pop().unwrap_or(msg.des);
         let index = self.neighbours_map[&next];
         self.neighbours[index].address.send(msg);
     }
 }
 
 pub struct NeighbourData {
+    pub id: u64,
     pub connection: Connection,
     pub address: SyncAddress<Node>,
 }
@@ -86,7 +87,7 @@ impl Handler<HelloNode> for Node {
     fn handle(&mut self, msg: HelloNode, ctx: &mut Context<Self>) -> Response<Self, HelloNode> {
         if !self.neighbours_map.contains_key(&msg.id) {
             self.neighbours_map.insert(msg.id, self.neighbours.len());
-            self.neighbours.push(NeighbourData { address: msg.pipe.clone(), connection: msg.connection.clone() });
+            self.neighbours.push(NeighbourData { address: msg.pipe.clone(), connection: msg.connection.clone(), id: msg.id });
             // only send back message if message it did not originate to prevent loops
             if !msg.reply {
                 msg.pipe.send(HelloNode { pipe: ctx.address(), reply: true, id: self.id, ..msg })
@@ -101,11 +102,8 @@ pub struct Tick;
 
 impl Handler<Tick> for Node {
     fn handle(&mut self, _msg: Tick, _ctx: &mut Context<Self>) -> Response<Self, Tick> {
-        self.fwd(Packet {
-            des: 0,
-            route: Vec::new(),
-            data: Ping { from: self.id },
-        });
+        self.dht_tick();
+
         Self::reply(())
     }
 }
@@ -117,8 +115,16 @@ impl<T: PacketData + Clone + Send + 'static> Handler<Packet<T>> for Node {
             assert_eq!(msg.route.len(), 0);
             T::process(&msg, self);
         } else {
+            assert!(msg.route.len() > 0);
             self.fwd(msg);
         }
+
+        if thread_rng().next_f32() < 0.01 {
+            let world_addr = Arbiter::system_registry().get::<world::World>();
+
+            world_addr.send(world::Sent);
+        }
+
         Self::reply(())
     }
 }

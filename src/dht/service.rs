@@ -90,6 +90,18 @@ impl<TId, TAddr, TNodeTable, TData> GenDHT<TId, TAddr, TNodeTable, TData>
     }
 }
 
+impl Node {
+    pub fn dht_tick(&mut self) {
+        for n in &self.neighbours {
+            self.fwd(Packet {
+                des: n.id,
+                route: Vec::new(),
+                data: Ping { from: self.id },
+            });
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct Ping {
     pub from: u64
@@ -97,6 +109,6 @@ pub struct Ping {
 
 impl PacketData for Ping {
     fn process(packet: &Packet<Self>, node: &mut Node) {
-        node.dht.on_ping(&DHTNode { id: packet.data.from, address: packet.route.clone() });
+        node.dht.on_ping(&DHTNode { id: packet.data.from, route: packet.route.clone() });
     }
 }

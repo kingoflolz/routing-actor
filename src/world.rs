@@ -14,7 +14,7 @@ use petgraph::visit::EdgeRef;
 use spade::HasPosition;
 use spade::rtree::RTree;
 
-use node::{Node, HelloNode};
+use node::{Node, HelloNode, Tick};
 use connection::Connection;
 
 struct GraphNode {
@@ -31,6 +31,9 @@ pub struct World {
     active: usize,
     pending: usize,
     adding: bool,
+
+    message_no: u64,
+    last_seen_message: u64,
 }
 
 #[derive(Clone, Debug)]
@@ -67,6 +70,8 @@ impl World {
             active: 0,
             pending: 0,
             adding: true,
+            last_seen_message: 0,
+            message_no: 0,
         }
     }
 
@@ -117,20 +122,20 @@ impl Actor for World {
         // number of fully connected core nodes
         let core = 8;
 
-        // 1 million nodes (approx)
-        // how deep the hierarchy is
-        let levels = 6;
-        // number of nodes under another node, on average
-        let spread = [1, 20, 20, 5, 6, 10];
-        // number of connections on the same level
-        let conn = [core, 2, 2, 2, 2, 2];
-
-        // // 10k nodes (approx)
-        // let levels = 4;
+        // // 1 million nodes (approx)
+        // // how deep the hierarchy is
+        // let levels = 6;
         // // number of nodes under another node, on average
-        // let spread = [1, 20, 5, 10];
+        // let spread = [1, 20, 20, 5, 6, 10];
         // // number of connections on the same level
-        // let conn = [core, 2, 2, 2];
+        // let conn = [core, 2, 2, 2, 2, 2];
+
+        // 40k nodes (approx)
+        let levels = 4;
+        // number of nodes under another node, on average
+        let spread = [1, 20, 20, 10];
+        // number of connections on the same level
+        let conn = [core, 2, 2, 2];
 
         let mut num_nodes = core;
         // add core nodes
@@ -202,6 +207,7 @@ pub struct HelloWorld {
 impl Handler<HelloWorld> for World {
     fn handle(&mut self, msg: HelloWorld, _ctx: &mut Context<Self>) -> Response<Self, HelloWorld> {
         self.graph[msg.graph_index].address = Some(msg.addr.clone());
+        self.mapping.insert(msg.id, msg.graph_index);
         self.active += 1;
         self.pending -= 1;
         for i in self.graph.edges(msg.graph_index) {
@@ -219,7 +225,6 @@ pub struct Wake;
 impl Handler<Wake> for World {
     // runs every ms
     fn handle(&mut self, _msg: Wake, ctx: &mut Context<Self>) -> Response<Self, Wake> {
-        ctx.notify(Wake, Duration::new(0, 100_000));
 
         if self.pending == 0 && self.adding {
             self.adding = self.add_nodes();
@@ -227,9 +232,20 @@ impl Handler<Wake> for World {
         }
 
         if !self.adding {
-            Arbiter::system().send(msgs::SystemExit(0));
+            // everything is done processing (in theory)
+            if self.last_seen_message == self.message_no {
+                println!("sent {}", self.last_seen_message);
+                for (k, &v) in &self.mapping {
+                    if let Some(ref a) = self.graph[v].address {
+                        a.send(Tick);
+                    }
+                }
+            }
+
+            self.message_no = self.last_seen_message;
         }
 
+        ctx.notify(Wake, Duration::new(0, 100_000));
         Self::reply(())
     }
 }
@@ -242,6 +258,16 @@ pub struct AddThread {
 impl Handler<AddThread> for World {
     fn handle(&mut self, msg: AddThread, _ctx: &mut Context<Self>) -> Response<Self, AddThread> {
         self.threads.push(msg.thread);
+        Self::reply(())
+    }
+}
+
+#[derive(Message)]
+pub struct Sent;
+
+impl Handler<Sent> for World {
+    fn handle(&mut self, msg: Sent, _ctx: &mut Context<Self>) -> Response<Self, Sent> {
+        self.last_seen_message += 1;
         Self::reply(())
     }
 }
