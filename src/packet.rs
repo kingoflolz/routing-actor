@@ -15,6 +15,7 @@ pub trait SearchPacketData {
 
 #[derive(Clone)]
 pub struct Packet<T: PacketData + Clone + Send + ResponseType> {
+    pub from: u64,
     pub des: u64,
     pub route: Vec<u64>,
     //list of hops
@@ -28,6 +29,7 @@ impl<T: PacketData + Clone + Send + ResponseType> ResponseType for Packet<T> whe
 
 #[derive(Clone)]
 pub struct SearchPacket<T: SearchPacketData + Clone> {
+    pub from: u64,
     des: u64,
     nc: NC,
     data: T

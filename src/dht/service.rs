@@ -98,9 +98,10 @@ impl Node {
         for n in &self.neighbours {
             if thread_rng().next_f32() < 0.1 {
                 self.fwd(Packet {
+                    from: self.id,
                     des: n.id,
                     route: Vec::new(),
-                    data: Ping { from: self.id },
+                    data: Ping,
                 });
             }
         }
@@ -108,13 +109,11 @@ impl Node {
 }
 
 #[derive(Clone, Debug, Message)]
-pub struct Ping {
-    pub from: u64,
-}
+pub struct Ping;
 
 impl PacketData for Ping {
     fn process(packet: &Packet<Self>, node: &mut Node) -> Response<Node, Packet<Ping>> {
-        node.dht.on_ping(&DHTNode { id: packet.data.from, route: packet.route.clone() });
+        node.dht.on_ping(&DHTNode { id: packet.from, route: packet.route.clone() });
         Node::reply(())
     }
 }
@@ -137,7 +136,7 @@ pub struct DHTLookupReply {
 impl PacketData for DHTLookup {
     fn process(packet: &Packet<Self>, node: &mut Node) -> Response<Node, Packet<Self>> {
         //node.dht.on_ping(&DHTNode { id: packet.data.from, route: packet.route.clone() });
-        Node::reply(Packet { data: DHTLookupReply { reply: Vec::new() }, des: 0, route: Vec::new() })
+        Node::reply(Packet { data: DHTLookupReply { reply: Vec::new() }, des: 0, route: Vec::new(), from: node.id })
     }
 }
 
