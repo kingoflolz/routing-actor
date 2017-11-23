@@ -32,6 +32,8 @@ pub struct World {
     pending: usize,
     adding: bool,
 
+    epoch: u64,
+
     message_no: u64,
     last_seen_message: u64,
 }
@@ -70,6 +72,7 @@ impl World {
             active: 0,
             pending: 0,
             adding: true,
+            epoch: 0,
             last_seen_message: 0,
             message_no: 0,
         }
@@ -225,27 +228,23 @@ pub struct Wake;
 impl Handler<Wake> for World {
     // runs every ms
     fn handle(&mut self, _msg: Wake, ctx: &mut Context<Self>) -> Response<Self, Wake> {
-
-        if self.pending == 0 && self.adding {
-            self.adding = self.add_nodes();
-            println!("added more nodes, total: {}", self.active);
-        }
-
-        if !self.adding {
-            // everything is done processing (in theory)
-            if self.last_seen_message == self.message_no {
-                println!("sent {}", self.last_seen_message);
-                for (k, &v) in &self.mapping {
-                    if let Some(ref a) = self.graph[v].address {
-                        a.send(Tick);
-                    }
+        // everything is done processing (in theory)
+        if self.last_seen_message == self.message_no {
+            if self.adding && self.epoch % 50 == 0 {
+                self.adding = self.add_nodes();
+                println!("added more nodes, total: {}", self.active);
+            }
+            println!("sent {}", self.last_seen_message);
+            for (k, &v) in &self.mapping {
+                if let Some(ref a) = self.graph[v].address {
+                    a.send(Tick);
                 }
             }
-
-            self.message_no = self.last_seen_message;
+            self.epoch += 1;
         }
+        self.message_no = self.last_seen_message;
 
-        ctx.notify(Wake, Duration::new(0, 100_000));
+        ctx.notify(Wake, Duration::new(0, 1_000_000));
         Self::reply(())
     }
 }

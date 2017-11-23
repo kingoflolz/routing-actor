@@ -9,8 +9,11 @@
 
 //! Protocol-agnostic service implementation
 
+use actix::*;
+
 use std::marker;
 use std::collections::HashMap;
+use rand::{thread_rng, Rng};
 
 use super::{GenericId, GenericNodeTable, DHTNode};
 use dht::knodetable::KNodeTable;
@@ -93,22 +96,54 @@ impl<TId, TAddr, TNodeTable, TData> GenDHT<TId, TAddr, TNodeTable, TData>
 impl Node {
     pub fn dht_tick(&mut self) {
         for n in &self.neighbours {
-            self.fwd(Packet {
-                des: n.id,
-                route: Vec::new(),
-                data: Ping { from: self.id },
-            });
+            if thread_rng().next_f32() < 0.1 {
+                self.fwd(Packet {
+                    des: n.id,
+                    route: Vec::new(),
+                    data: Ping { from: self.id },
+                });
+            }
         }
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Message)]
 pub struct Ping {
-    pub from: u64
+    pub from: u64,
 }
 
 impl PacketData for Ping {
-    fn process(packet: &Packet<Self>, node: &mut Node) {
+    fn process(packet: &Packet<Self>, node: &mut Node) -> Response<Node, Packet<Ping>> {
         node.dht.on_ping(&DHTNode { id: packet.data.from, route: packet.route.clone() });
+        Node::reply(())
+    }
+}
+
+type DHTLookupReplyPacket = Packet<DHTLookupReply>;
+
+#[derive(Clone, Debug, Message)]
+#[Message(DHTLookupReplyPacket)]
+pub struct DHTLookup {
+    pub from: u64,
+    pub goal: u64,
+}
+
+#[derive(Clone, Debug, Message)]
+pub struct DHTLookupReply {
+    pub reply: Vec<DHTNode<u64, Vec<u64>>>,
+}
+
+
+impl PacketData for DHTLookup {
+    fn process(packet: &Packet<Self>, node: &mut Node) -> Response<Node, Packet<Self>> {
+        //node.dht.on_ping(&DHTNode { id: packet.data.from, route: packet.route.clone() });
+        Node::reply(Packet { data: DHTLookupReply { reply: Vec::new() }, des: 0, route: Vec::new() })
+    }
+}
+
+impl PacketData for DHTLookupReply {
+    fn process(packet: &Packet<Self>, node: &mut Node) -> Response<Node, Packet<Self>> {
+        //node.dht.on_ping(&DHTNode { id: packet.data.from, route: packet.route.clone() });
+        Node::reply(())
     }
 }

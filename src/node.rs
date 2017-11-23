@@ -5,6 +5,9 @@ use connection::Connection;
 use rand::{thread_rng, Rng};
 
 use std::collections::HashMap;
+use std::marker::Send;
+
+use futures::Future;
 
 use world;
 use nc;
@@ -17,6 +20,7 @@ use dht::service::*;
 
 pub struct Node {
     // going to be bigger in the future
+    pub world: SyncAddress<world::World>,
     pub id: u64,
     pub graph_index: NodeIndex,
     pub neighbours: Vec<NeighbourData>,
@@ -29,6 +33,7 @@ impl Node {
     pub fn new(graph_index: NodeIndex) -> Node {
         let id = thread_rng().next_u64();
         Node {
+            world: Arbiter::system_registry().get::<world::World>(),
             id,
             neighbours: Vec::new(),
             graph_index,
@@ -38,11 +43,18 @@ impl Node {
         }
     }
 
-    pub fn fwd<T: PacketData + Clone + Send + 'static>(&self, msg: Packet<T>) {
+    pub fn fwd<T: PacketData + Clone + Send + ResponseType + 'static>(&self, msg: Packet<T>) -> Response<Self, Packet<T>>
+        where T::Item: Send, T::Error: Send {
         let mut msg = msg.clone();
         let next = msg.route.pop().unwrap_or(msg.des);
         let index = self.neighbours_map[&next];
-        self.neighbours[index].address.send(msg);
+        let f = self.neighbours[index].address.call(self, msg);
+        Node::async_reply(ActorFuture::then(f, |item, actor, ctx| {
+            match item.unwrap() {
+                Ok(s) => fut::ok::<T::Item, T::Error, Node>(s),
+                Err(e) => fut::err::<T::Item, T::Error, Node>(e)
+            }
+        }))
     }
 }
 
@@ -62,9 +74,7 @@ impl Actor for Node {
     type Context = Context<Self>;
 
     fn started(&mut self, ctx: &mut Self::Context) {
-        let world_addr = Arbiter::system_registry().get::<world::World>();
-
-        world_addr.send(world::HelloWorld { addr: ctx.address(), graph_index: self.graph_index, id: self.id });
+        self.world.send(world::HelloWorld { addr: ctx.address(), graph_index: self.graph_index, id: self.id });
 
         // println!("Node started {:?}", self.graph_index);
         // Arbiter::system().send(msgs::SystemExit(0));
@@ -109,29 +119,24 @@ impl Handler<Tick> for Node {
 }
 
 // in band messages
-impl<T: PacketData + Clone + Send + 'static> Handler<Packet<T>> for Node {
+impl<T: PacketData + Clone + Send + ResponseType + 'static> Handler<Packet<T>> for Node where <T as ResponseType>::Item: Send, <T as ResponseType>::Error: Send {
     fn handle(&mut self, msg: Packet<T>, ctx: &mut Context<Self>) -> Response<Self, Packet<T>> {
+        if thread_rng().next_f32() < 0.01 {
+            self.world.send(world::Sent);
+        }
+
         if msg.des == self.id {
             assert_eq!(msg.route.len(), 0);
-            T::process(&msg, self);
+            T::process(&msg, self)
         } else {
             assert!(msg.route.len() > 0);
-            self.fwd(msg);
+            self.fwd(msg)
         }
-
-        if thread_rng().next_f32() < 0.01 {
-            let world_addr = Arbiter::system_registry().get::<world::World>();
-
-            world_addr.send(world::Sent);
-        }
-
-        Self::reply(())
     }
 }
 
-impl<T: SearchPacketData + Clone + Send> Handler<SearchPacket<T>> for Node {
+impl<T: SearchPacketData + Clone + Send + ResponseType> Handler<SearchPacket<T>> for Node {
     fn handle(&mut self, msg: SearchPacket<T>, ctx: &mut Context<Self>) -> Response<Self, SearchPacket<T>> {
-        T::process(&msg, self);
-        Self::reply(())
+        T::process(&msg, self)
     }
 }
