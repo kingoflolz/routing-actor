@@ -50,14 +50,25 @@ impl Node {
         let index = self.neighbours_map[&next];
         let f = self.neighbours[index].address.call(self, msg);
         Node::async_reply(ActorFuture::then(f, |item, actor, ctx| {
+            println!("yaya");
             match item.unwrap() {
                 Ok(s) => fut::ok::<T::Item, T::Error, Node>(s),
                 Err(e) => fut::err::<T::Item, T::Error, Node>(e)
             }
         }))
     }
+
+    pub fn send_packet<T: PacketData + Clone + Send + ResponseType + 'static>(&self, msg: Packet<T>) -> Request<Node, Packet<T>>
+        where T::Item: Send, T::Error: Send {
+        let mut msg = msg.clone();
+        let next = msg.route.pop().unwrap_or(msg.des);
+        let index = self.neighbours_map[&next];
+        self.neighbours[index].address.call(self, msg)
+    }
 }
 
+
+#[derive(Clone)]
 pub struct NeighbourData {
     pub id: u64,
     pub connection: Connection,
@@ -111,8 +122,8 @@ impl Handler<HelloNode> for Node {
 pub struct Tick;
 
 impl Handler<Tick> for Node {
-    fn handle(&mut self, _msg: Tick, _ctx: &mut Context<Self>) -> Response<Self, Tick> {
-        self.dht_tick();
+    fn handle(&mut self, _msg: Tick, ctx: &mut Context<Self>) -> Response<Self, Tick> {
+        self.dht_tick(ctx);
 
         Self::reply(())
     }
@@ -124,10 +135,10 @@ impl<T: PacketData + Clone + Send + ResponseType + 'static> Handler<Packet<T>> f
         if thread_rng().next_f32() < 0.01 {
             self.world.send(world::Sent);
         }
-
         if msg.des == self.id {
             assert_eq!(msg.route.len(), 0);
-            T::process(&msg, self)
+            let r = T::process(&msg, self);
+            r
         } else {
             assert!(msg.route.len() > 0);
             self.fwd(msg)

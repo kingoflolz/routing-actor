@@ -94,15 +94,30 @@ impl<TId, TAddr, TNodeTable, TData> GenDHT<TId, TAddr, TNodeTable, TData>
 }
 
 impl Node {
-    pub fn dht_tick(&mut self) {
-        for n in &self.neighbours {
+    pub fn dht_tick(&mut self, ctx: &mut Context<Self>) {
+        for n in &self.neighbours.clone() {
             if thread_rng().next_f32() < 0.1 {
-                self.fwd(Packet {
+                ctx.spawn(self.send_packet(Packet {
                     from: self.id,
                     des: n.id,
                     route: Vec::new(),
-                    data: Ping,
-                });
+                    data: DHTLookup { goal: self.id },
+                }).then(|item, actor, ctx| {
+                    println!("dht rec");
+                    fut::ok::<(), (), Node>(())
+                }));
+
+                // let mut r = self.send_packet(Packet {
+                //     from: self.id,
+                //     des: n.id,
+                //     route: Vec::new(),
+                //     data: Ping,
+                // });
+                // let mut f = ActorFuture::then(r, |item, actor, ctx| {
+                //     println!("ping rec");
+                //     fut::ok::<(), (), Node>(())
+                // });
+                // Arbiter::
             }
         }
     }
@@ -123,7 +138,6 @@ type DHTLookupReplyPacket = Packet<DHTLookupReply>;
 #[derive(Clone, Debug, Message)]
 #[Message(DHTLookupReplyPacket)]
 pub struct DHTLookup {
-    pub from: u64,
     pub goal: u64,
 }
 
@@ -135,14 +149,14 @@ pub struct DHTLookupReply {
 
 impl PacketData for DHTLookup {
     fn process(packet: &Packet<Self>, node: &mut Node) -> Response<Node, Packet<Self>> {
-        //node.dht.on_ping(&DHTNode { id: packet.data.from, route: packet.route.clone() });
-        Node::reply(Packet { data: DHTLookupReply { reply: Vec::new() }, des: 0, route: Vec::new(), from: node.id })
+        let r = node.dht.on_find_node(&DHTNode { id: packet.from, route: packet.route.clone() }, &packet.data.goal);
+        let p = packet.reverse();
+        Node::reply(Packet::new(p, DHTLookupReply { reply: r }))
     }
 }
 
 impl PacketData for DHTLookupReply {
     fn process(packet: &Packet<Self>, node: &mut Node) -> Response<Node, Packet<Self>> {
-        //node.dht.on_ping(&DHTNode { id: packet.data.from, route: packet.route.clone() });
         Node::reply(())
     }
 }

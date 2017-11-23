@@ -22,6 +22,28 @@ pub struct Packet<T: PacketData + Clone + Send + ResponseType> {
     pub data: T
 }
 
+pub struct PacketRouteData {
+    pub from: u64,
+    pub des: u64,
+    pub route: Vec<u64>,
+}
+
+impl<T: PacketData + Clone + Send + ResponseType> Packet<T> {
+    pub fn reverse(&self) -> PacketRouteData {
+        let mut r = self.clone();
+        r.route.reverse();
+        PacketRouteData {
+            from: r.des,
+            des: r.from,
+            route: r.route
+        }
+    }
+
+    pub fn new(r: PacketRouteData, d: T) -> Packet<T> {
+        Packet { data: d, route: r.route, des: r.des, from: r.from }
+    }
+}
+
 impl<T: PacketData + Clone + Send + ResponseType> ResponseType for Packet<T> where T::Error: Debug, T::Item: Send, T::Error: Send {
     type Item = T::Item;
     type Error = T::Error;
