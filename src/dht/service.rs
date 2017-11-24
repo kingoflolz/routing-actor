@@ -92,8 +92,7 @@ impl<TId, TAddr, TNodeTable, TData> GenDHT<TId, TAddr, TNodeTable, TData>
             return;
         }
 
-        if !self.table.update(&node) {
-        }
+        if !self.table.update(&node) {}
     }
 }
 
@@ -102,11 +101,11 @@ impl Node {
         let mut closest = current_nodes.unwrap_or(self.dht.table.find(&goal, 16));
 
         if closest.len() < 1 {
-            return Box::new(fut::err(()))
+            return Box::new(fut::err(()));
         }
 
         if closest[0].id == goal {
-            return Box::new(fut::ok(closest[0].clone()))
+            return Box::new(fut::ok(closest[0].clone()));
         }
 
         Box::new(self.send_packet(Packet {
@@ -117,28 +116,23 @@ impl Node {
         }).then(move |item, actor, ctx| {
             let mut c = closest;
             c.remove(0);
-            actor.dht_lookup(goal, Some(c))
-            // match item.unwrap() {
-            //     Ok(response) => {
-            //         let r = response.data.reply;
-            //         return Node::async_reply(*actor.dht_lookup(goal, Some(r)))
-            //
-            //         //if r[0].id == goal {
-            //         //    return Box::new(result(Ok(DHTNode{id:0, route:Vec::new()})))
-            //         //} else {
-            //         //    return actor.dht_lookup(goal, Some(r))
-            //         //}
-            //     },
-            //     Err(error) => {
-            //         return Node::async_reply(*actor.dht_lookup(goal, Some(c)))
-            //
-            //         //if c.len() > 0 {
-            //         //    return actor.dht_lookup(goal, Some(c))
-            //         //} else {
-            //         //    return Box::new(fut::err(()))
-            //         //}
-            //     }
-            // }
+            match item.unwrap() {
+                Ok(response) => {
+                    let r = response.data.reply;
+                    if r[0].id == goal {
+                        return Box::new(fut::ok(DHTNode { id: 0u64, route: Vec::<u64>::new() })) as Box<ActorFuture<Item=DHTNode<u64, Vec<u64>>, Error=(), Actor=Node>>
+                    } else {
+                        return actor.dht_lookup(goal, Some(r))
+                    }
+                }
+                Err(error) => {
+                    if c.len() > 0 {
+                        return actor.dht_lookup(goal, Some(c))
+                    } else {
+                        return Box::new(fut::err(())) as Box<ActorFuture<Item=DHTNode<u64, Vec<u64>>, Error=(), Actor=Node>>
+                    }
+                }
+            }
         }))
 
         // self.send_packet(Packet {
