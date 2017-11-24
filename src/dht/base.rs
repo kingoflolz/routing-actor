@@ -68,7 +68,7 @@ pub trait GenericNodeTable<TId, TAddr>: Send + Sync + Debug
 /// Every node has an address (IP and port) and a numeric ID, which is
 /// used to calculate metrics and look up data.
 #[derive(Clone, Debug)]
-pub struct DHTNode<TId, TAddr> {
+pub struct DHTNode<TId, TAddr> where TId: Sized, TAddr: Sized {
     /// Network address of the node.
     pub route: TAddr,
     /// ID of the node.

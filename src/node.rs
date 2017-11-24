@@ -27,6 +27,7 @@ pub struct Node {
     pub neighbours_map: HashMap<u64, usize>,
     pub nc: nc::NCNodeData,
     pub dht: DHT,
+    pub dht_init: bool,
 }
 
 impl Node {
@@ -39,7 +40,8 @@ impl Node {
             graph_index,
             neighbours_map: HashMap::new(),
             nc: nc::NCNodeData::new(),
-            dht: DHT::new(id)
+            dht: DHT::new(id),
+            dht_init: false,
         }
     }
 
@@ -131,10 +133,10 @@ impl Handler<Tick> for Node {
 // in band messages
 impl<T: PacketData + Clone + Send + ResponseType + 'static> Handler<Packet<T>> for Node where <T as ResponseType>::Item: Send, <T as ResponseType>::Error: Send {
     fn handle(&mut self, msg: Packet<T>, ctx: &mut Context<Self>) -> Response<Self, Packet<T>> {
-        if thread_rng().next_f32() < 0.01 {
-            self.world.send(world::Sent);
-        }
         if msg.des == self.id {
+            if thread_rng().next_f32() < 0.01 {
+                self.world.send(world::Sent);
+            }
             assert_eq!(msg.route.len(), 0);
             let r = T::process(&msg, self);
             r

@@ -10,6 +10,9 @@
 //! Protocol-agnostic service implementation
 
 use actix::*;
+use actix::fut::result;
+use actix::fut::FutureResult;
+use std::any::Any;
 
 use std::marker;
 use std::collections::HashMap;
@@ -95,43 +98,89 @@ impl<TId, TAddr, TNodeTable, TData> GenDHT<TId, TAddr, TNodeTable, TData>
 }
 
 impl Node {
+    fn dht_lookup(&self, goal: u64, current_nodes: Option<Vec<DHTNode<u64, Vec<u64>>>>) -> Box<ActorFuture<Item=DHTNode<u64, Vec<u64>>, Error=(), Actor=Node>> {
+        let mut closest = current_nodes.unwrap_or(self.dht.table.find(&goal, 16));
+
+        if closest.len() < 1 {
+            return Box::new(fut::err(()))
+        }
+
+        if closest[0].id == goal {
+            return Box::new(fut::ok(closest[0].clone()))
+        }
+
+        Box::new(self.send_packet(Packet {
+            from: self.id,
+            des: goal,
+            route: closest[0].route.clone(),
+            data: DHTLookup { goal: self.id },
+        }).then(move |item, actor, ctx| {
+            let mut c = closest;
+            c.remove(0);
+            actor.dht_lookup(goal, Some(c))
+            // match item.unwrap() {
+            //     Ok(response) => {
+            //         let r = response.data.reply;
+            //         return Node::async_reply(*actor.dht_lookup(goal, Some(r)))
+            //
+            //         //if r[0].id == goal {
+            //         //    return Box::new(result(Ok(DHTNode{id:0, route:Vec::new()})))
+            //         //} else {
+            //         //    return actor.dht_lookup(goal, Some(r))
+            //         //}
+            //     },
+            //     Err(error) => {
+            //         return Node::async_reply(*actor.dht_lookup(goal, Some(c)))
+            //
+            //         //if c.len() > 0 {
+            //         //    return actor.dht_lookup(goal, Some(c))
+            //         //} else {
+            //         //    return Box::new(fut::err(()))
+            //         //}
+            //     }
+            // }
+        }))
+
+        // self.send_packet(Packet {
+        //     from: self.id,
+        //     des: n.id,
+        //     route: Vec::new(),
+        //     data: DHTLookup { goal: self.id },
+        // }).then(|item, actor, ctx| {
+        //     // Arbiter::system().send(msgs::SystemExit(0));
+        //     // println!("dht rec {:?}", item.clone().unwrap().unwrap());
+        //     for mut i in item.clone().unwrap().unwrap().data.reply {
+        //         i.route.append(&mut item.clone().unwrap().unwrap().get_full_route());
+        //         i.route = simplify_route(i.route);
+        //         actor.dht.update(&i);
+        //         if thread_rng().next_f32() < 0.001 {
+        //             println!("{:?}", actor.dht)
+        //         }
+        //     }
+        //     fut::ok::<(), (), Node>(())
+        // });
+    }
+
     pub fn dht_tick(&mut self, ctx: &mut Context<Self>) {
         for n in &self.neighbours.clone() {
-            if thread_rng().next_f32() < 0.1 {
-                ctx.spawn(self.send_packet(Packet {
-                    from: self.id,
-                    des: n.id,
-                    route: Vec::new(),
-                    data: DHTLookup { goal: self.id },
-                }).then(|item, actor, ctx| {
-                    // Arbiter::system().send(msgs::SystemExit(0));
-                    // println!("dht rec {:?}", item.clone().unwrap().unwrap());
-                    for mut i in item.clone().unwrap().unwrap().data.reply {
-                        i.route.append(&mut item.clone().unwrap().unwrap().get_full_route());
-                        i.route = simplify_route(i.route);
-                        actor.dht.update(&i);
-                        // if thread_rng().next_f32() < 0.001 {
-                        //     println!("{:?}", actor.dht)
-                        // }
-                    }
-                    fut::ok::<(), (), Node>(())
-                }));
+            if thread_rng().next_f32() < 0.01 || !self.dht_init {
+                self.dht_lookup(self.id, None);
 
-                ctx.spawn(self.send_packet(Packet {
-                    from: self.id,
-                    des: n.id,
-                    route: Vec::new(),
-                    data: DHTLookup { goal: thread_rng().next_u64() },
-                }).then(|item, actor, ctx| {
-                    // println!("dht rec {:?}", item.clone().unwrap().unwrap());
-                    for mut i in item.clone().unwrap().unwrap().data.reply {
-                        i.route.append(&mut item.clone().unwrap().unwrap().get_full_route());
-                        i.route = simplify_route(i.route);
-                        actor.dht.update(&i)
-                    }
-                    // Arbiter::system().send(msgs::SystemExit(0));
-                    fut::ok::<(), (), Node>(())
-                }));
+                // ctx.spawn(self.send_packet(Packet {
+                //     from: self.id,
+                //     des: n.id,
+                //     route: Vec::new(),
+                //     data: DHTLookup { goal: thread_rng().next_u64() },
+                // }).then(|item, actor, ctx| {
+                //     // println!("dht rec {:?}", item.clone().unwrap().unwrap());
+                //     for mut i in item.clone().unwrap().unwrap().data.reply {
+                //         i.route.append(&mut item.clone().unwrap().unwrap().get_full_route());
+                //         i.route = simplify_route(i.route);
+                //         actor.dht.update(&i)
+                //     }
+                //     // Arbiter::system().send(msgs::SystemExit(0));
+                //     fut::ok::<(), (), Node>(())
+                // }));
 
                 // let mut r = self.send_packet(Packet {
                 //     from: self.id,
@@ -146,6 +195,7 @@ impl Node {
                 // Arbiter::
             }
         }
+        self.dht_init = true;
     }
 }
 

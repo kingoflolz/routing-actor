@@ -12,30 +12,28 @@ use super::{GenericId, DHTNode};
 
 
 /// Payload in the request.
-pub enum RequestPayload<TId, TValue> {
+pub enum RequestPayload<TId> {
     Ping,
     FindNode(TId),
-    FindValue(TId),
-    Store(TId, TValue)
 }
 
 /// Request structure.
-pub struct Request<TId, TAddr, TValue> {
+pub struct Request<TId, TAddr> {
     pub caller: DHTNode<TId, TAddr>,
     pub request_id: TId,
-    pub payload: RequestPayload<TId, TValue>
+    pub payload: RequestPayload<TId>
 }
 
 /// Payload in the response.
-pub enum ResponsePayload<TId, TAddr, TValue> {
+pub enum ResponsePayload<TId, TAddr> {
     NodesFound(Vec<DHTNode<TId, TAddr>>),
-    ValueFound(TValue),
+    RouteFound(TAddr),
     NoResult
 }
 
 /// Response structure.
-pub struct Response<TId, TAddr, TValue> {
-    pub request: Request<TId, TAddr, TValue>,
+pub struct Response<TId, TAddr> {
+    pub request: Request<TId, TAddr>,
     pub responder: DHTNode<TId, TAddr>,
-    pub payload: ResponsePayload<TId, TAddr, TValue>
+    pub payload: ResponsePayload<TId, TAddr>
 }

@@ -55,7 +55,7 @@ impl HasPosition for MapNode {
 impl Default for World {
     fn default() -> World {
         let mut threads: Vec<SyncAddress<Arbiter>> = Vec::new();
-        for i in 0..4 {
+        for i in 0..5 {
             threads.push(Arbiter::new(format!("Core {}", i)))
         }
         World::new(&threads)
@@ -236,12 +236,14 @@ impl Handler<Wake> for World {
     // runs every ms
     fn handle(&mut self, _msg: Wake, ctx: &mut Context<Self>) -> Response<Self, Wake> {
         // everything is done processing (in theory)
-        if self.last_seen_message == self.message_no {
+        if self.last_seen_message == self.message_no && self.pending == 0 {
             if self.adding && self.epoch % 50 == 0 {
                 self.adding = self.add_nodes();
                 println!("added more nodes, total: {}", self.active);
             }
-            println!("sent {}", self.last_seen_message);
+            if self.epoch % 50 == 0 {
+                println!("sent {}", self.last_seen_message);
+            }
             for (k, &v) in &self.mapping {
                 if let Some(ref a) = self.graph[v].address {
                     a.send(Tick);

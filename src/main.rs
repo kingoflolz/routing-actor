@@ -1,3 +1,6 @@
+#![feature(conservative_impl_trait)]
+#![feature(box_syntax)]
+
 extern crate actix;
 extern crate petgraph;
 extern crate spade;
