@@ -49,7 +49,7 @@ impl GenericId for u64 {
 /// Trait representing table with known nodes.
 ///
 /// Keeps some reasonable subset of known nodes passed to `update`.
-pub trait GenericNodeTable<TId, TAddr>: Send + Sync
+pub trait GenericNodeTable<TId, TAddr>: Send + Sync + Debug
     where TId: GenericId {
     /// Create new table
     fn new(node_id: TId) -> Self;

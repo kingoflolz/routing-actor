@@ -133,19 +133,19 @@ impl Actor for World {
         // // number of connections on the same level
         // let conn = [core, 2, 2, 2, 2, 2];
 
-        // // 40k nodes (approx)
-        // let levels = 4;
-        // // number of nodes under another node, on average
-        // let spread = [1, 20, 20, 10];
-        // // number of connections on the same level
-        // let conn = [core, 2, 2, 2];
-
-        // 100 nodes (approx)
-        let levels = 2;
+        // 40k nodes (approx)
+        let levels = 4;
         // number of nodes under another node, on average
-        let spread = [1, 12];
+        let spread = [1, 20, 20, 10];
         // number of connections on the same level
-        let conn = [core, 2];
+        let conn = [core, 2, 2, 2];
+
+        // // 100 nodes (approx)
+        // let levels = 2;
+        // // number of nodes under another node, on average
+        // let spread = [1, 12];
+        // // number of connections on the same level
+        // let conn = [core, 2];
 
         let mut num_nodes = core;
         // add core nodes

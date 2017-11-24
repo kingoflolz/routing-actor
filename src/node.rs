@@ -50,7 +50,6 @@ impl Node {
         let index = self.neighbours_map[&next];
         let f = self.neighbours[index].address.call(self, msg);
         Node::async_reply(ActorFuture::then(f, |item, actor, ctx| {
-            println!("yaya");
             match item.unwrap() {
                 Ok(s) => fut::ok::<T::Item, T::Error, Node>(s),
                 Err(e) => fut::err::<T::Item, T::Error, Node>(e)

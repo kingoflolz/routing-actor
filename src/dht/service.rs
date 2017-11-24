@@ -34,6 +34,7 @@ pub enum FindResult<TId, TAddr, TData> {
     Nothing
 }
 
+#[derive(Debug)]
 pub struct GenDHT<TId, TAddr, TNodeTable, TData>
     where TId: GenericId,
           TNodeTable: GenericNodeTable<TId, TAddr>,
@@ -103,7 +104,32 @@ impl Node {
                     route: Vec::new(),
                     data: DHTLookup { goal: self.id },
                 }).then(|item, actor, ctx| {
-                    println!("dht rec");
+                    // Arbiter::system().send(msgs::SystemExit(0));
+                    // println!("dht rec {:?}", item.clone().unwrap().unwrap());
+                    for mut i in item.clone().unwrap().unwrap().data.reply {
+                        i.route.append(&mut item.clone().unwrap().unwrap().get_full_route());
+                        i.route = simplify_route(i.route);
+                        actor.dht.update(&i);
+                        // if thread_rng().next_f32() < 0.001 {
+                        //     println!("{:?}", actor.dht)
+                        // }
+                    }
+                    fut::ok::<(), (), Node>(())
+                }));
+
+                ctx.spawn(self.send_packet(Packet {
+                    from: self.id,
+                    des: n.id,
+                    route: Vec::new(),
+                    data: DHTLookup { goal: thread_rng().next_u64() },
+                }).then(|item, actor, ctx| {
+                    // println!("dht rec {:?}", item.clone().unwrap().unwrap());
+                    for mut i in item.clone().unwrap().unwrap().data.reply {
+                        i.route.append(&mut item.clone().unwrap().unwrap().get_full_route());
+                        i.route = simplify_route(i.route);
+                        actor.dht.update(&i)
+                    }
+                    // Arbiter::system().send(msgs::SystemExit(0));
                     fut::ok::<(), (), Node>(())
                 }));
 
@@ -143,15 +169,16 @@ pub struct DHTLookup {
 
 #[derive(Clone, Debug, Message)]
 pub struct DHTLookupReply {
+    pub goal: u64,
     pub reply: Vec<DHTNode<u64, Vec<u64>>>,
 }
 
 
 impl PacketData for DHTLookup {
     fn process(packet: &Packet<Self>, node: &mut Node) -> Response<Node, Packet<Self>> {
-        let r = node.dht.on_find_node(&DHTNode { id: packet.from, route: packet.route.clone() }, &packet.data.goal);
+        let r = node.dht.on_find_node(&DHTNode { id: packet.from, route: packet.get_full_route() }, &packet.data.goal);
         let p = packet.reverse();
-        Node::reply(Packet::new(p, DHTLookupReply { reply: r }))
+        Node::reply(Packet::new(p, DHTLookupReply { reply: r, goal: packet.data.goal }))
     }
 }
 

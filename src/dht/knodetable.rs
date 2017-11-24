@@ -36,6 +36,7 @@ static DEFAULT_HASH_SIZE: usize = 64;
 ///
 /// methods may panic if distance between two ids is greater than the
 /// `hash_size`.
+#[derive(Debug)]
 pub struct KNodeTable<TId, TAddr> {
     this_id: TId,
     hash_size: usize,
@@ -44,6 +45,7 @@ pub struct KNodeTable<TId, TAddr> {
 }
 
 /// K-bucket - structure for keeping last nodes in Kademlia.
+#[derive(Debug)]
 pub struct KBucket<TId, TAddr> {
     data: VecDeque<DHTNode<TId, TAddr>>,
     size: usize,
