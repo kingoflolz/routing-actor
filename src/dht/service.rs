@@ -27,56 +27,52 @@ use packet::*;
 
 static MAX_NODE_COUNT: usize = 16;
 
-pub type DHT = GenDHT<u64, Vec<u64>, KNodeTable<u64, Vec<u64>>, ()>;
+pub type DHT = GenDHT<KNodeTable, ()>;
 
 /// Result of the find operations - either data or nodes closest to it.
 #[derive(Debug)]
-pub enum FindResult<TId, TAddr, TData> {
+pub enum FindResult<TData> {
     Value(TData),
-    ClosestNodes(Vec<DHTNode<TId, TAddr>>),
+    ClosestNodes(Vec<DHTNode>),
     Nothing
 }
 
 #[derive(Debug)]
-pub struct GenDHT<TId, TAddr, TNodeTable, TData>
-    where TId: GenericId,
-          TNodeTable: GenericNodeTable<TId, TAddr>,
+pub struct GenDHT<TNodeTable, TData>
+    where TNodeTable: GenericNodeTable,
           TData: Send + Sync + Clone {
-    _phantom: marker::PhantomData<TAddr>,
-    node_id: TId,
+    node_id: u64,
     table: TNodeTable,
-    data: HashMap<TId, TData>,
+    data: HashMap<u64, TData>,
 }
 
-impl<TId, TAddr, TNodeTable, TData> GenDHT<TId, TAddr, TNodeTable, TData>
-    where TId: GenericId,
-          TNodeTable: GenericNodeTable<TId, TAddr>,
+impl<TNodeTable, TData> GenDHT<TNodeTable, TData>
+    where TNodeTable: GenericNodeTable,
           TData: Send + Sync + Clone {
-    pub fn new(node_id: TId) -> Self {
+    pub fn new(node_id: u64) -> Self {
         GenDHT {
             node_id: node_id.clone(),
             table: TNodeTable::new(node_id),
             data: HashMap::new(),
-            _phantom: marker::PhantomData,
         }
     }
 
     /// Process the ping request.
     ///
     /// Essentially remembers the incoming node and returns true.
-    pub fn on_ping(&mut self, sender: &DHTNode<TId, TAddr>) -> bool {
+    pub fn on_ping(&mut self, sender: &DHTNode) -> bool {
         self.update(sender);
         true
     }
     /// Process the find request.
-    pub fn on_find_node(&mut self, sender: &DHTNode<TId, TAddr>, id: &TId) -> Vec<DHTNode<TId, TAddr>> {
+    pub fn on_find_node(&mut self, sender: &DHTNode, id: &u64) -> Vec<DHTNode> {
         let res = self.table.find(&id, MAX_NODE_COUNT);
         self.update(sender);
         res
     }
     /// Find a value or the closes nodes.
-    pub fn on_find_value(&mut self, sender: &DHTNode<TId, TAddr>, id: &TId)
-                         -> FindResult<TId, TAddr, TData> {
+    pub fn on_find_value(&mut self, sender: &DHTNode, id: &u64)
+                         -> FindResult<TData> {
         self.update(sender);
         let data = &self.data;
         let table = &self.table;
@@ -87,7 +83,7 @@ impl<TId, TAddr, TNodeTable, TData> GenDHT<TId, TAddr, TNodeTable, TData>
         res
     }
 
-    fn update(&mut self, node: &DHTNode<TId, TAddr>) {
+    fn update(&mut self, node: &DHTNode) {
         if node.id == self.node_id {
             return;
         }
@@ -97,39 +93,67 @@ impl<TId, TAddr, TNodeTable, TData> GenDHT<TId, TAddr, TNodeTable, TData>
 }
 
 impl Node {
-    fn dht_lookup(&self, goal: u64, current_nodes: Option<Vec<DHTNode<u64, Vec<u64>>>>) -> Box<ActorFuture<Item=DHTNode<u64, Vec<u64>>, Error=(), Actor=Node>> {
-        let mut closest = current_nodes.unwrap_or(self.dht.table.find(&goal, 16));
+    fn dht_lookup(&self, goal: u64, current_nodes: Option<Vec<DHTNode>>, init: bool)
+                  -> Box<ActorFuture<Item=DHTNode, Error=(), Actor=Node>> {
+        println!("ID: {}, looking for goal {}", self.id, goal);
+        let mut closest = current_nodes.unwrap_or(self.dht.table.find(&(goal), 16));
 
-        if closest.len() < 1 {
+        // println!("c {:?} {}", closest, self.id);
+
+        if init && closest.len() > 0 {
+            closest.remove(0);
+        }
+
+        if closest.len() < 1 || closest[0].id == self.id {
+            println!("ID: {}, not found {}, returning", self.id, goal);
             return Box::new(fut::err(()));
         }
 
         if closest[0].id == goal {
-            return Box::new(fut::ok(closest[0].clone()));
+            let mut r = closest[0].clone();
+            r.route.push(self.id);
+            println!("ID: {}, found {}!", self.id, goal);
+            return Box::new(fut::ok(r));
         }
 
+        let mut r = closest[0].route.clone();
+
+        println!("ID: {}, sending packet to {}, looking for goal {}", self.id, closest[0].id, goal);
         Box::new(self.send_packet(Packet {
             from: self.id,
-            des: goal,
-            route: closest[0].route.clone(),
-            data: DHTLookup { goal: self.id },
+            des: closest[0].id,
+            route: r.clone(),
+            data: DHTLookup { goal, path_to: r },
         }).then(move |item, actor, ctx| {
             let mut c = closest;
-            c.remove(0);
-            match item.unwrap() {
+            match item.clone().unwrap() {
                 Ok(response) => {
-                    let r = response.data.reply;
-                    if r[0].id == goal {
-                        return Box::new(fut::ok(DHTNode { id: 0u64, route: Vec::<u64>::new() })) as Box<ActorFuture<Item=DHTNode<u64, Vec<u64>>, Error=(), Actor=Node>>
+                    for i in response.data.reply.clone().iter_mut() {
+                        i.route.append(&mut item.clone().unwrap().unwrap().get_full_route());
+                        // i.route = simplify_route(i.route.clone());
+                        actor.dht.update(&i)
+                    }
+
+                    let r = &response.data.reply[0];
+                    if r.id == goal {
+                        let mut r = r.clone();
+                        let mut hop = response.clone().get_full_route();
+                        hop.reverse();
+                        r.prepend(&mut hop);
+                        println!("ID: {}, found {}, replying", actor.id, goal);
+                        return Box::new(fut::ok(DHTNode { id: 0u64, route: r.route })) as Box<ActorFuture<Item=DHTNode, Error=(), Actor=Node>>
                     } else {
-                        return actor.dht_lookup(goal, Some(r))
+                        println!("ID: {}, not found {}, recursing", actor.id, goal);
+                        return actor.dht_lookup(goal, Some(response.data.reply.clone()), init)
                     }
                 }
                 Err(error) => {
+                    println!("ID: {}, err", actor.id);
                     if c.len() > 0 {
-                        return actor.dht_lookup(goal, Some(c))
+                        return actor.dht_lookup(goal, Some(c), init)
                     } else {
-                        return Box::new(fut::err(())) as Box<ActorFuture<Item=DHTNode<u64, Vec<u64>>, Error=(), Actor=Node>>
+                        println!("ID: {}, not found {}, replying", actor.id, goal);
+                        return Box::new(fut::err(())) as Box<ActorFuture<Item=DHTNode, Error=(), Actor=Node>>
                     }
                 }
             }
@@ -156,9 +180,21 @@ impl Node {
     }
 
     pub fn dht_tick(&mut self, ctx: &mut Context<Self>) {
+        println!("ID: {}, Table {:?}", self.id, self.dht);
         for n in &self.neighbours.clone() {
-            if thread_rng().next_f32() < 0.01 || !self.dht_init {
-                self.dht_lookup(self.id, None);
+            let mut r = self.send_packet(Packet {
+                from: self.id,
+                des: n.id,
+                route: vec![n.id],
+                data: Ping,
+            });
+
+            // ctx.spawn(self.dht_lookup(self.id, None, true).then(|item, ctx, context| {
+            //     fut::ok::<(), (), Node>(())
+            // }));
+            ctx.spawn(self.dht_lookup(thread_rng().next_u64(), None, false).then(|item, actor, context| {
+                fut::ok::<(), (), Node>(())
+            }));
 
                 // ctx.spawn(self.send_packet(Packet {
                 //     from: self.id,
@@ -176,19 +212,12 @@ impl Node {
                 //     fut::ok::<(), (), Node>(())
                 // }));
 
-                // let mut r = self.send_packet(Packet {
-                //     from: self.id,
-                //     des: n.id,
-                //     route: Vec::new(),
-                //     data: Ping,
-                // });
                 // let mut f = ActorFuture::then(r, |item, actor, ctx| {
                 //     println!("ping rec");
                 //     fut::ok::<(), (), Node>(())
                 // });
                 // Arbiter::
             }
-        }
         self.dht_init = true;
     }
 }
@@ -198,7 +227,10 @@ pub struct Ping;
 
 impl PacketData for Ping {
     fn process(packet: &Packet<Self>, node: &mut Node) -> Response<Node, Packet<Ping>> {
-        node.dht.on_ping(&DHTNode { id: packet.from, route: packet.route.clone() });
+        let mut r = packet.get_full_route().clone();
+        r.push(packet.from);
+        r.reverse();
+        node.dht.on_ping(&DHTNode { id: packet.from, route: r });
         Node::reply(())
     }
 }
@@ -209,20 +241,22 @@ type DHTLookupReplyPacket = Packet<DHTLookupReply>;
 #[Message(DHTLookupReplyPacket)]
 pub struct DHTLookup {
     pub goal: u64,
+    pub path_to: Vec<u64>,
 }
 
 #[derive(Clone, Debug, Message)]
 pub struct DHTLookupReply {
     pub goal: u64,
-    pub reply: Vec<DHTNode<u64, Vec<u64>>>,
+    pub reply: Vec<DHTNode>,
 }
 
 
 impl PacketData for DHTLookup {
     fn process(packet: &Packet<Self>, node: &mut Node) -> Response<Node, Packet<Self>> {
-        let r = node.dht.on_find_node(&DHTNode { id: packet.from, route: packet.get_full_route() }, &packet.data.goal);
+        println!("ID: {}, processed DHT lookup", node.id);
+        let r = node.dht.on_find_node(&DHTNode { id: packet.from, route: packet.route.reverse() }, &packet.data.goal);
         let p = packet.reverse();
-        Node::reply(Packet::new(p, DHTLookupReply { reply: r, goal: packet.data.goal }))
+        Node::reply(Packet::new(Packet { from: Node.id, des: packet.from }, DHTLookupReply { reply: r, goal: packet.data.goal }))
     }
 }
 

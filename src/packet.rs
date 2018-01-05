@@ -42,9 +42,7 @@ impl<T: PacketData + Clone + Send + ResponseType> Packet<T> {
     }
 
     pub fn get_full_route(&self) -> Vec<u64> {
-        let mut r = self.route.clone();
-        r.push(self.des);
-        r
+        self.route.clone()
     }
 
     pub fn new(r: PacketRouteData, d: T) -> Packet<T> {

@@ -18,22 +18,22 @@ pub enum RequestPayload<TId> {
 }
 
 /// Request structure.
-pub struct Request<TId, TAddr> {
-    pub caller: DHTNode<TId, TAddr>,
+pub struct Request<TId> {
+    pub caller: DHTNode,
     pub request_id: TId,
     pub payload: RequestPayload<TId>
 }
 
 /// Payload in the response.
-pub enum ResponsePayload<TId, TAddr> {
-    NodesFound(Vec<DHTNode<TId, TAddr>>),
+pub enum ResponsePayload<TAddr> {
+    NodesFound(Vec<DHTNode>),
     RouteFound(TAddr),
     NoResult
 }
 
 /// Response structure.
 pub struct Response<TId, TAddr> {
-    pub request: Request<TId, TAddr>,
-    pub responder: DHTNode<TId, TAddr>,
-    pub payload: ResponsePayload<TId, TAddr>
+    pub request: Request<TId>,
+    pub responder: DHTNode,
+    pub payload: ResponsePayload<TAddr>
 }

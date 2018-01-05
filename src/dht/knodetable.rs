@@ -37,33 +37,31 @@ static DEFAULT_HASH_SIZE: usize = 64;
 /// methods may panic if distance between two ids is greater than the
 /// `hash_size`.
 #[derive(Debug)]
-pub struct KNodeTable<TId, TAddr> {
-    this_id: TId,
+pub struct KNodeTable {
+    this_id: u64,
     hash_size: usize,
     // TODO(divius): convert to more appropriate data structure
-    buckets: Vec<KBucket<TId, TAddr>>,
+    buckets: Vec<KBucket>,
 }
 
 /// K-bucket - structure for keeping last nodes in Kademlia.
 #[derive(Debug)]
-pub struct KBucket<TId, TAddr> {
-    data: VecDeque<DHTNode<TId, TAddr>>,
+pub struct KBucket {
+    data: VecDeque<DHTNode>,
     size: usize,
 }
 
 
-impl<TId, TAddr> KNodeTable<TId, TAddr>
-    where TId: GenericId,
-          TAddr: Clone + Debug {
+impl KNodeTable {
     /// Create a new node table.
     ///
     /// `this_id` -- ID of the current node (used to calculate metrics).
-    pub fn new(this_id: TId) -> KNodeTable<TId, TAddr> {
+    pub fn new(this_id: u64) -> KNodeTable {
         KNodeTable::new_with_details(this_id, BUCKET_SIZE, DEFAULT_HASH_SIZE)
     }
 
-    pub fn new_with_details(this_id: TId, bucket_size: usize,
-                            hash_size: usize) -> KNodeTable<TId, TAddr> {
+    pub fn new_with_details(this_id: u64, bucket_size: usize,
+                            hash_size: usize) -> KNodeTable {
         KNodeTable {
             this_id: this_id,
             hash_size: hash_size,
@@ -72,17 +70,17 @@ impl<TId, TAddr> KNodeTable<TId, TAddr>
         }
     }
 
-    pub fn buckets(&self) -> &Vec<KBucket<TId, TAddr>> {
+    pub fn buckets(&self) -> &Vec<KBucket> {
         &self.buckets
     }
 
     #[inline]
-    fn distance(id1: &TId, id2: &TId) -> TId {
+    fn distance(id1: &u64, id2: &u64) -> u64 {
         id1.bitxor(id2)
     }
 
-    fn bucket_number(&self, id: &TId) -> usize {
-        let diff = KNodeTable::<TId, TAddr>::distance(&self.this_id, id);
+    fn bucket_number(&self, id: &u64) -> usize {
+        let diff = KNodeTable::distance(&self.this_id, id);
         debug_assert!(!diff.is_zero());
         let res = diff.bits() - 1;
         if res >= self.hash_size {
@@ -94,33 +92,31 @@ impl<TId, TAddr> KNodeTable<TId, TAddr>
     }
 }
 
-impl<TId, TAddr> GenericNodeTable<TId, TAddr> for KNodeTable<TId, TAddr>
-    where TId: GenericId,
-          TAddr: Clone + Debug + Sync + Send {
-    fn new(this_id: TId) -> KNodeTable<TId, TAddr> {
+impl GenericNodeTable for KNodeTable {
+    fn new(this_id: u64) -> KNodeTable {
         KNodeTable::new_with_details(this_id, BUCKET_SIZE, DEFAULT_HASH_SIZE)
     }
 
-    fn random_id(&self) -> TId {
-        TId::gen(self.hash_size)
+    fn random_id(&self) -> u64 {
+        u64::gen(self.hash_size)
     }
 
-    fn update(&mut self, node: &DHTNode<TId, TAddr>) -> bool {
+    fn update(&mut self, node: &DHTNode) -> bool {
         assert!(node.id != self.this_id);
         let bucket = self.bucket_number(&node.id);
         self.buckets[bucket].update(node)
     }
 
-    fn find(&self, id: &TId, count: usize) -> Vec<DHTNode<TId, TAddr>> {
+    fn find(&self, id: &u64, count: usize) -> Vec<DHTNode> {
         debug_assert!(count > 0);
-        assert!(*id != self.this_id);
+        // assert!(*id != self.this_id);
 
         let mut data_copy: Vec<_> = self.buckets.iter().flat_map(|b| &b.data).map(|n| n.clone()).collect();
-        data_copy.sort_by_key(|n| KNodeTable::<TId, TAddr>::distance(id, &n.id));
+        data_copy.sort_by_key(|n| KNodeTable::distance(id, &n.id));
         data_copy[0..cmp::min(count, data_copy.len())].to_vec()
     }
 
-    fn pop_oldest(&mut self) -> Vec<DHTNode<TId, TAddr>> {
+    fn pop_oldest(&mut self) -> Vec<DHTNode> {
         // For every full k-bucket, pop the last.
         // TODO(divius): TTL expiration?
         self.buckets.iter_mut()
@@ -130,10 +126,8 @@ impl<TId, TAddr> GenericNodeTable<TId, TAddr> for KNodeTable<TId, TAddr>
     }
 }
 
-impl<TId, TAddr> KBucket<TId, TAddr>
-    where TId: GenericId,
-          TAddr: Clone + Debug {
-    pub fn new(k: usize) -> KBucket<TId, TAddr> {
+impl KBucket {
+    pub fn new(k: usize) -> KBucket {
         assert!(k > 0);
         KBucket {
             data: VecDeque::new(),
@@ -141,7 +135,7 @@ impl<TId, TAddr> KBucket<TId, TAddr>
         }
     }
 
-    pub fn update(&mut self, node: &DHTNode<TId, TAddr>) -> bool {
+    pub fn update(&mut self, node: &DHTNode) -> bool {
         if self.data.iter().any(|x| x.id == node.id) {
             self.update_position(node.clone());
             true
@@ -153,20 +147,20 @@ impl<TId, TAddr> KBucket<TId, TAddr>
         }
     }
 
-    pub fn find(&self, id: &TId, count: usize) -> Vec<DHTNode<TId, TAddr>> {
+    pub fn find(&self, id: &u64, count: usize) -> Vec<DHTNode> {
         let mut data_copy: Vec<_> = self.data.iter().map(|n| n.clone()).collect();
-        data_copy.sort_by_key(|n| KNodeTable::<TId, TAddr>::distance(id, &n.id));
+        data_copy.sort_by_key(|n| KNodeTable::distance(id, &n.id));
         data_copy[0..cmp::min(count, data_copy.len())].to_vec()
     }
 
-    pub fn data(&self) -> &VecDeque<DHTNode<TId, TAddr>> {
+    pub fn data(&self) -> &VecDeque<DHTNode> {
         &self.data
     }
     pub fn size(&self) -> usize {
         self.size
     }
 
-    fn update_position(&mut self, node: DHTNode<TId, TAddr>) {
+    fn update_position(&mut self, node: DHTNode) {
         // TODO(divius): 1. optimize, 2. make it less ugly
         let mut new_data = VecDeque::with_capacity(self.data.len());
         new_data.extend(self.data.iter()

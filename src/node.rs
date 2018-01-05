@@ -6,6 +6,7 @@ use rand::{thread_rng, Rng};
 
 use std::collections::HashMap;
 use std::marker::Send;
+use std::fmt::Debug;
 
 use futures::Future;
 
@@ -45,10 +46,10 @@ impl Node {
         }
     }
 
-    pub fn fwd<T: PacketData + Clone + Send + ResponseType + 'static>(&self, msg: Packet<T>) -> Response<Self, Packet<T>>
+    pub fn fwd<T: PacketData + Clone + Send + ResponseType + 'static + Debug>(&self, msg: Packet<T>) -> Response<Self, Packet<T>>
         where T::Item: Send, T::Error: Send {
         let mut msg = msg.clone();
-        let next = msg.route.pop().unwrap_or(msg.des);
+        let next = msg.route.pop().expect(&format!("ID: {}, error while forwarding {:?}, nmap: {:?}", self.id, msg, self.neighbours_map));
         let index = self.neighbours_map[&next];
         let f = self.neighbours[index].address.call(self, msg);
         Node::async_reply(ActorFuture::then(f, |item, actor, ctx| {
@@ -57,14 +58,15 @@ impl Node {
                 Err(e) => fut::err::<T::Item, T::Error, Node>(e)
             }
         }))
+
     }
 
-    pub fn send_packet<T: PacketData + Clone + Send + ResponseType + 'static>(&self, msg: Packet<T>) -> Request<Node, Packet<T>>
+    pub fn send_packet<T: PacketData + Clone + Send + ResponseType + 'static + Debug>(&self, msg: Packet<T>) -> Request<Node, Packet<T>>
         where T::Item: Send, T::Error: Send {
-        let mut msg = msg.clone();
-        let next = msg.route.pop().unwrap_or(msg.des);
-        let index = self.neighbours_map[&next];
-        self.neighbours[index].address.call(self, msg)
+        let mut m = msg.clone();
+        let next = m.route.pop().expect(&format!("ID: {}, error while sending {:?}, nmap: {:?}", self.id, m, self.neighbours_map));
+        let index = self.neighbours_map.get(&next).expect("Key not in neighbour map");
+        self.neighbours[*index].address.call(self, m)
     }
 }
 
@@ -131,17 +133,20 @@ impl Handler<Tick> for Node {
 }
 
 // in band messages
-impl<T: PacketData + Clone + Send + ResponseType + 'static> Handler<Packet<T>> for Node where <T as ResponseType>::Item: Send, <T as ResponseType>::Error: Send {
+impl<T: PacketData + Clone + Send + ResponseType + 'static + Debug> Handler<Packet<T>> for Node where <T as ResponseType>::Item: Send, <T as ResponseType>::Error: Send {
     fn handle(&mut self, msg: Packet<T>, ctx: &mut Context<Self>) -> Response<Self, Packet<T>> {
+        if thread_rng().next_f32() < 0.01 {
+            self.world.send(world::Sent);
+        }
         if msg.des == self.id {
-            if thread_rng().next_f32() < 0.01 {
-                self.world.send(world::Sent);
-            }
             assert_eq!(msg.route.len(), 0);
             let r = T::process(&msg, self);
             r
         } else {
-            assert!(msg.route.len() > 0);
+            if msg.route.len() == 0 {
+                println!("RiP {:?}, {}", msg, self.id);
+                assert!(msg.route.len() > 0);
+            }
             self.fwd(msg)
         }
     }

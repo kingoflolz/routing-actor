@@ -49,18 +49,17 @@ impl GenericId for u64 {
 /// Trait representing table with known nodes.
 ///
 /// Keeps some reasonable subset of known nodes passed to `update`.
-pub trait GenericNodeTable<TId, TAddr>: Send + Sync + Debug
-    where TId: GenericId {
+pub trait GenericNodeTable: Send + Sync + Debug {
     /// Create new table
-    fn new(node_id: TId) -> Self;
+    fn new(node_id: u64) -> Self;
     /// Generate suitable random ID.
-    fn random_id(&self) -> TId;
+    fn random_id(&self) -> u64;
     /// Store or update node in the table.
-    fn update(&mut self, node: &DHTNode<TId, TAddr>) -> bool;
+    fn update(&mut self, node: &DHTNode) -> bool;
     /// Find given number of node, closest to given ID.
-    fn find(&self, id: &TId, count: usize) -> Vec<DHTNode<TId, TAddr>>;
+    fn find(&self, id: &u64, count: usize) -> Vec<DHTNode>;
     /// Pop expired or the oldest nodes from table for inspection.
-    fn pop_oldest(&mut self) -> Vec<DHTNode<TId, TAddr>>;
+    fn pop_oldest(&mut self) -> Vec<DHTNode>;
 }
 
 /// Structure representing a node in system.
@@ -68,11 +67,17 @@ pub trait GenericNodeTable<TId, TAddr>: Send + Sync + Debug
 /// Every node has an address (IP and port) and a numeric ID, which is
 /// used to calculate metrics and look up data.
 #[derive(Clone, Debug)]
-pub struct DHTNode<TId, TAddr> where TId: Sized, TAddr: Sized {
+pub struct DHTNode where {
     /// Network address of the node.
-    pub route: TAddr,
+    pub route: Vec<u64>,
     /// ID of the node.
-    pub id: TId
+    pub id: u64
+}
+
+impl DHTNode {
+    pub fn prepend(&mut self, e: &mut Vec<u64>) {
+        self.route.append(e)
+    }
 }
 
 /// Trait representing the API.
@@ -81,13 +86,13 @@ pub trait GenericAPI<TId, TAddr>
     /// Value type.
     type TValue: Send + Sync + Clone;
     /// Ping a node.
-    fn ping<F>(&mut self, node: &DHTNode<TId, TAddr>) -> Future<Item=DHTNode<TId, TAddr>, Error=()>;
+    fn ping<F>(&mut self, node: &DHTNode) -> Future<Item=DHTNode, Error=()>;
     /// Return nodes clothest to the given id.
-    fn find_node<F>(&mut self, id: &TId) -> Future<Item=Vec<DHTNode<TId, TAddr>>, Error=()>;
+    fn find_node<F>(&mut self, id: &TId) -> Future<Item=Vec<DHTNode>, Error=()>;
     /// Find a value in the network.
     ///
     /// Either returns a value or several clothest nodes.
-    fn find_value<F>(&mut self, id: &TId) -> Future<Item=(Option<Self::TValue>, Vec<DHTNode<TId, TAddr>>), Error=()>;
+    fn find_value<F>(&mut self, id: &TId) -> Future<Item=(Option<Self::TValue>, Vec<DHTNode>), Error=()>;
     /// Store a value on a node.
-    fn store(&mut self, node: &DHTNode<TId, TAddr>, id: &TId, value: Self::TValue);
+    fn store(&mut self, node: &DHTNode, id: &TId, value: Self::TValue);
 }

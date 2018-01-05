@@ -55,7 +55,7 @@ impl HasPosition for MapNode {
 impl Default for World {
     fn default() -> World {
         let mut threads: Vec<SyncAddress<Arbiter>> = Vec::new();
-        for i in 0..5 {
+        for i in 0..1 {
             threads.push(Arbiter::new(format!("Core {}", i)))
         }
         World::new(&threads)
@@ -133,19 +133,19 @@ impl Actor for World {
         // // number of connections on the same level
         // let conn = [core, 2, 2, 2, 2, 2];
 
-        // 40k nodes (approx)
-        let levels = 4;
-        // number of nodes under another node, on average
-        let spread = [1, 20, 20, 10];
-        // number of connections on the same level
-        let conn = [core, 2, 2, 2];
-
-        // // 100 nodes (approx)
-        // let levels = 2;
+        // // 40k nodes (approx)
+        // let levels = 4;
         // // number of nodes under another node, on average
-        // let spread = [1, 12];
+        // let spread = [1, 20, 20, 10];
         // // number of connections on the same level
-        // let conn = [core, 2];
+        // let conn = [core, 2, 2, 2];
+
+        // 100 nodes (approx)
+        let levels = 2;
+        // number of nodes under another node, on average
+        let spread = [1, 12];
+        // number of connections on the same level
+        let conn = [core, 2];
 
         let mut num_nodes = core;
         // add core nodes
@@ -159,7 +159,7 @@ impl Actor for World {
             for i in 0..num_nodes {
                 let p = [area.sample(&mut rng), area.sample(&mut rng)];
 
-                let graph_index = self.graph.add_node(GraphNode { address: None, thread: i % 4 });
+                let graph_index = self.graph.add_node(GraphNode { address: None, thread: 0 });
 
                 self.rtrees[level].insert(MapNode { position: p, graph_index });
             }
@@ -241,7 +241,7 @@ impl Handler<Wake> for World {
                 self.adding = self.add_nodes();
                 println!("added more nodes, total: {}", self.active);
             }
-            if self.epoch % 50 == 0 {
+            if self.epoch % 10 == 0 {
                 println!("sent {}", self.last_seen_message);
             }
             for (k, &v) in &self.mapping {
